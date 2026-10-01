@@ -177,8 +177,6 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-随后在 GitHub Releases 页面发布这个 tag，工作流就会开始发布。
-
 发布工作流会执行类型检查、构建和 `npm pack --dry-run`，随后运行 `npm publish --provenance`，无需保存 npm token。
 
 ---
