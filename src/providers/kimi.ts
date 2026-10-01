@@ -21,7 +21,7 @@ export class KimiProvider extends BaseSearchProvider {
     const apiKey = urlParams.get("kimi-apiKey")!;
     const model = this.getParam(urlParams, "model", "moonshot-v1-32k")!;
 
-    console.log(`[kimi-search] query: "${query}", model: ${model}`);
+    console.error(`[kimi-search] query: "${query}", model: ${model}`);
 
     const messages: any[] = [
       {
@@ -82,7 +82,7 @@ export class KimiProvider extends BaseSearchProvider {
           const toolName = toolCall.function.name;
           const toolArgs = JSON.parse(toolCall.function.arguments);
 
-          console.log(
+          console.error(
             `[kimi-search] tool_call: ${toolName}, args:`,
             toolArgs
           );

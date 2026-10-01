@@ -154,6 +154,43 @@ import { startServer } from "web-search-mcp/server";
 const server = startServer({ port: 3000 });
 ```
 
+### 🔌 stdio 模式
+
+全局安装后，可以通过 MCP 标准输入输出传输启动服务。`stdout` 只输出 JSON-RPC 消息，日志会写入 `stderr`：
+
+```bash
+npm install --global @herta-ai/web-search-mcp
+# 或：bun install --global @herta-ai/web-search-mcp
+web-search-mcp --stdio
+```
+
+也可以直接使用专用命令 `web-search-mcp-stdio`，或者在未全局安装时运行：
+
+```bash
+npx -y @herta-ai/web-search-mcp --stdio
+```
+
+stdio 没有 HTTP URL 参数，Provider 配置通过环境变量传入。例如：
+
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "web-search-mcp",
+      "args": ["--stdio"],
+      "env": {
+        "KIMI_API_KEY": "YOUR_KEY",
+        "DEFAULT_SEARCH": "kimi"
+      }
+    }
+  }
+}
+```
+
+Provider 参数会把现有的 `{provider}-{parameter}` 名称转换为大写下划线形式，例如 `kimi-apiKey` 对应 `KIMI_API_KEY`，`aliyuncs-baseUrl` 对应 `ALIYUNCS_BASE_URL`。也支持加上 `MCP_` 或 `WEB_SEARCH_MCP_` 前缀。
+
+在代码中也可以从 `@herta-ai/web-search-mcp/stdio` 导入 `startStdioServer` 或 `runStdioServer`。
+
 Provider 也可以单独导入使用。每个 Provider 接收搜索词和 URL 参数，因此可以嵌入自己的服务或任务：
 
 ```ts
@@ -422,6 +459,8 @@ web-search-mcp/
 │   ├── index.ts              # 📦 npm 库入口（无启动副作用）
 │   ├── cli.ts                # 🚪 CLI / Docker 启动入口
 │   ├── server.ts             # 🌐 MCP HTTP 服务器（动态路由）
+│   ├── stdio.ts              # 🔌 MCP stdio 传输
+│   ├── stdio-cli.ts          # 🚪 stdio CLI 启动入口
 │   ├── types.ts              # 📝 公共类型定义
 │   ├── registry.ts           # 📦 Provider 注册表 & 别名处理
 │   └── providers/            # 🔌 搜索引擎 Provider 目录

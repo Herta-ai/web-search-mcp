@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./server";
+export * from "./stdio";
 export * from "./registry";
 export * from "./providers/base";
 export * from "./providers/kimi";

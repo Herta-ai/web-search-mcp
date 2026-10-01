@@ -26,6 +26,11 @@
       "import": "./dist/server.js",
       "default": "./dist/server.js"
     },
+    "./stdio": {
+      "types": "./dist/types/stdio.d.ts",
+      "import": "./dist/stdio.js",
+      "default": "./dist/stdio.js"
+    },
     "./registry": {
       "types": "./dist/types/registry.d.ts",
       "import": "./dist/registry.js",
@@ -44,7 +49,8 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "web-search-mcp": "./dist/cli.js"
+    "web-search-mcp": "./dist/cli.js",
+    "web-search-mcp-stdio": "./dist/stdio-cli.js"
   },
   "files": [
     "dist/*.js",
@@ -59,7 +65,7 @@
     "typecheck": "bunx tsc --noEmit",
     "clean": "bun -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true })\"",
     "build:binary": "bun build --bytecode --minify --target=bun --compile src/cli.ts --outfile dist/web-search-mcp",
-    "build:runtime": "bun build src/index.ts --outfile dist/index.js --target bun --format esm && bun build src/server.ts --outfile dist/server.js --target bun --format esm && bun build src/registry.ts --outfile dist/registry.js --target bun --format esm && bun build src/cli.ts --outfile dist/cli.js --target bun --format esm && bun build src/providers/index.ts --outfile dist/providers/index.js --target bun --format esm && bun build src/providers/base.ts --outfile dist/providers/base.js --target bun --format esm && bun build src/providers/kimi.ts --outfile dist/providers/kimi.js --target bun --format esm && bun build src/providers/zai.ts --outfile dist/providers/zai.js --target bun --format esm && bun build src/providers/volces.ts --outfile dist/providers/volces.js --target bun --format esm && bun build src/providers/tencentmaas.ts --outfile dist/providers/tencentmaas.js --target bun --format esm && bun build src/providers/aliyuncs.ts --outfile dist/providers/aliyuncs.js --target bun --format esm",
+    "build:runtime": "bun build src/index.ts --outfile dist/index.js --target bun --format esm && bun build src/server.ts --outfile dist/server.js --target bun --format esm && bun build src/stdio.ts --outfile dist/stdio.js --target bun --format esm && bun build src/registry.ts --outfile dist/registry.js --target bun --format esm && bun build src/cli.ts --outfile dist/cli.js --target bun --format esm && bun build src/stdio-cli.ts --outfile dist/stdio-cli.js --target bun --format esm && bun build src/providers/index.ts --outfile dist/providers/index.js --target bun --format esm && bun build src/providers/base.ts --outfile dist/providers/base.js --target bun --format esm && bun build src/providers/kimi.ts --outfile dist/providers/kimi.js --target bun --format esm && bun build src/providers/zai.ts --outfile dist/providers/zai.js --target bun --format esm && bun build src/providers/volces.ts --outfile dist/providers/volces.js --target bun --format esm && bun build src/providers/tencentmaas.ts --outfile dist/providers/tencentmaas.js --target bun --format esm && bun build src/providers/aliyuncs.ts --outfile dist/providers/aliyuncs.js --target bun --format esm",
     "build:types": "bunx tsc -p tsconfig.build.json",
     "build": "bun run clean && bun run build:runtime && bun run build:types",
     "prepublishOnly": "bun run build",

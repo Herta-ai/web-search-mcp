@@ -22,7 +22,7 @@ export class AliyuncsProvider extends BaseSearchProvider {
     const baseUrl = urlParams.get("aliyuncs-baseUrl")!;
     const model = this.getParam(urlParams, "model", "qwen3.7-flash")!;
 
-    console.log(`[aliyuncs-search] query: "${query}", baseUrl: ${baseUrl}`);
+    console.error(`[aliyuncs-search] query: "${query}", baseUrl: ${baseUrl}`);
 
     const url = `${baseUrl.replace(/\/$/, "")}/compatible-mode/v1/responses`;
 

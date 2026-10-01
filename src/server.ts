@@ -62,7 +62,7 @@ export async function processMessage(
   const id = message.id ?? null;
 
   if (message._meta) {
-    console.log(`[MCP Metadata] Received _meta:`, message._meta);
+    console.error(`[MCP Metadata] Received _meta:`, message._meta);
   }
 
   if (method === "server/discover" || method === "initialize") {

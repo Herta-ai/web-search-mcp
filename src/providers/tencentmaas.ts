@@ -27,7 +27,7 @@ export class TencentmaasProvider extends BaseSearchProvider {
       "standard"
     )!;
 
-    console.log(`[tencentmaas-search] query: "${query}", model: ${model}`);
+    console.error(`[tencentmaas-search] query: "${query}", model: ${model}`);
 
     const resp = await fetch(
       "https://tokenhub.tencentmaas.com/v1/chat/completions",

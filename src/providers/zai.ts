@@ -43,7 +43,7 @@ export class ZaiProvider extends BaseSearchProvider {
     )!;
     const contentSize = this.getParam(urlParams, "content_size", "medium");
 
-    console.log(`[zai-search] query: "${query}", engine: ${searchEngine}`);
+    console.error(`[zai-search] query: "${query}", engine: ${searchEngine}`);
 
     const resp = await fetch(
       "https://open.bigmodel.cn/api/paas/v4/web_search",

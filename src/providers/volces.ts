@@ -45,7 +45,7 @@ export class VolcesProvider extends BaseSearchProvider {
     const limit = parseInt(this.getParam(urlParams, "limit", "10")!);
     const sourcesStr = this.getParam(urlParams, "sources", "");
 
-    console.log(`[volces-search] query: "${query}", model: ${model}`);
+    console.error(`[volces-search] query: "${query}", model: ${model}`);
 
     const webSearchTool: any = {
       type: "web_search",
