@@ -33,6 +33,20 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      - name: ⬆️ Upgrade npm for trusted publishing
+        run: |
+          npm install --global npm@latest
+          node --version
+          npm --version
+          npm_version="$(npm --version)"
+          npm_major="${npm_version%%.*}"
+          npm_minor="${npm_version#*.}"
+          npm_minor="${npm_minor%%.*}"
+          if [ "$npm_major" -lt 11 ] || { [ "$npm_major" -eq 11 ] && [ "$npm_minor" -lt 5 ]; }; then
+            echo "npm Trusted Publishing requires npm 11.5.1 or newer; found $npm_version" >&2
+            exit 1
+          fi
+
       - name: 🔎 Validate package
         run: bun run typecheck && bun run build && npm pack --dry-run
 
