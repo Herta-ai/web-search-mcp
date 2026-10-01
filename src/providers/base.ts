@@ -58,7 +58,10 @@ export abstract class BaseSearchProvider implements SearchProvider {
   abstract readonly optionalParams: ParamDef[];
 
   isAvailable(urlParams: URLSearchParams): boolean {
-    return this.requiredParams.every((p) => urlParams.has(p));
+    return this.requiredParams.every((p) => {
+      const value = urlParams.get(p);
+      return value !== null && value.trim().length > 0;
+    });
   }
 
   getToolDefinition(): McpTool {
@@ -81,7 +84,8 @@ export abstract class BaseSearchProvider implements SearchProvider {
     paramName: string,
     defaultValue?: string
   ): string | undefined {
-    return urlParams.get(`${this.name}-${paramName}`) ?? defaultValue;
+    const value = urlParams.get(`${this.name}-${paramName}`);
+    return value === null || value.trim().length === 0 ? defaultValue : value;
   }
 
   abstract search(

@@ -1,5 +1,9 @@
-import { server } from "./server";
-
-console.log(`🚀 MCP Server running at http://localhost:${server.port}`);
-console.log(`🔑 Example: POST http://localhost:3000/mcp?kimi-apiKey=YOUR_KEY`);
-console.log(`📚 Supported providers: kimi, zai, volces, tencentmaas, aliyuncs`);
+export * from "./types";
+export * from "./server";
+export * from "./registry";
+export * from "./providers/base";
+export * from "./providers/kimi";
+export * from "./providers/zai";
+export * from "./providers/volces";
+export * from "./providers/tencentmaas";
+export * from "./providers/aliyuncs";

@@ -33,6 +33,7 @@
 | 📡 **MCP 协议** | 完整实现 Model Context Protocol (2026-07-28) |
 | ⚡ **零运行时依赖** | 全部使用原生 `fetch`，无第三方依赖 |
 | 🚀 **轻量高效** | 基于 Bun 运行时，启动快、内存占用低 |
+| 📦 **npm 可复用** | 可导入服务器、注册表或任意 Provider，也可作为 CLI 启动 |
 | 🐳 **Docker 支持** | 开箱即用的 Dockerfile，便于容器化部署 |
 | 🧩 **易于扩展** | 实现接口 + 注册一行代码 = 新增搜索引擎 |
 
@@ -118,10 +119,67 @@ bun run dev
 ### 🔨 构建可执行文件
 
 ```bash
-bun run build
+bun run build:binary
 ```
 
-编译后的可执行文件位于 `dist/web-search-mcp`
+编译后的可执行文件位于 `dist/web-search-mcp`。如果要构建 npm 包，运行 `bun run build`。
+
+### 📦 作为 npm 包使用
+
+项目需要 Bun 运行时（`>= 1.1`）。安装后可以直接使用 CLI：
+
+```bash
+npm install web-search-mcp
+npx web-search-mcp
+```
+
+也可以显式导入服务器并自行配置端口、路径或 Provider 注册表。导入模块不会自动监听端口：
+
+```ts
+import { createDefaultRegistry, startServer } from "web-search-mcp";
+
+const server = startServer({
+  port: 3000,
+  registry: createDefaultRegistry(),
+});
+
+console.log(`MCP server: ${server.url}/mcp`);
+```
+
+只需要服务器模块时，可以使用 `web-search-mcp/server`：
+
+```ts
+import { startServer } from "web-search-mcp/server";
+
+const server = startServer({ port: 3000 });
+```
+
+Provider 也可以单独导入使用。每个 Provider 接收搜索词和 URL 参数，因此可以嵌入自己的服务或任务：
+
+```ts
+import { KimiProvider } from "web-search-mcp/providers/kimi";
+
+const kimi = new KimiProvider();
+const result = await kimi.search(
+  "今天北京天气",
+  new URLSearchParams({ "kimi-apiKey": process.env.KIMI_API_KEY! }),
+);
+```
+
+根入口也导出了 `KimiProvider`、`ZaiProvider`、`VolcesProvider`、`TencentmaasProvider`、`AliyuncsProvider`、`ProviderRegistry` 和 `startServer`。
+
+### 🔐 npm OIDC 发布
+
+仓库中的 `.github/workflows/npm-publish.yml` 使用 npm trusted publishing，通过 GitHub Actions 的 OIDC 身份发布并生成 provenance。首次发布前，请在 npm 包设置中把 GitHub 仓库、工作流文件名 `npm-publish.yml` 和发布分支配置为 trusted publisher，然后创建一个 GitHub Release：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+随后在 GitHub Releases 页面发布这个 tag，工作流就会开始发布。
+
+发布工作流会执行类型检查、构建和 `npm pack --dry-run`，随后运行 `npm publish --provenance`，无需保存 npm token。
 
 ---
 
@@ -363,7 +421,8 @@ services:
 ```
 web-search-mcp/
 ├── src/
-│   ├── index.ts              # 🚪 入口文件
+│   ├── index.ts              # 📦 npm 库入口（无启动副作用）
+│   ├── cli.ts                # 🚪 CLI / Docker 启动入口
 │   ├── server.ts             # 🌐 MCP HTTP 服务器（动态路由）
 │   ├── types.ts              # 📝 公共类型定义
 │   ├── registry.ts           # 📦 Provider 注册表 & 别名处理

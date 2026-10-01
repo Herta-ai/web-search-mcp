@@ -1,8 +1,40 @@
-import { registry } from "./registry";
+import { createDefaultRegistry, type ProviderRegistry } from "./registry";
 
-const PROTOCOL_VERSION = "2026-07-28";
+export const PROTOCOL_VERSION = "2026-07-28";
+export const DEFAULT_PORT = 3000;
+export const DEFAULT_PATH = "/mcp";
 
-const corsHeaders = {
+export interface JsonRpcRequest {
+  jsonrpc?: "2.0";
+  id?: string | number | null;
+  method?: string;
+  params?: Record<string, unknown>;
+  _meta?: unknown;
+}
+
+export interface ServerOptions {
+  /** Port to listen on. Defaults to PORT or 3000. */
+  port?: number | string;
+  hostname?: string;
+  /** MCP endpoint path. Defaults to /mcp. */
+  path?: string;
+  idleTimeout?: number;
+  registry?: ProviderRegistry;
+  protocolVersion?: string;
+  serverName?: string;
+  serverVersion?: string;
+  corsHeaders?: Record<string, string>;
+}
+
+/** The small part of Bun's server object that applications commonly use. */
+export interface McpServer {
+  readonly url: URL;
+  readonly port: number | undefined;
+  readonly hostname: string | undefined;
+  stop(closeActiveConnections?: boolean): Promise<void>;
+}
+
+const defaultCorsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
@@ -11,224 +43,232 @@ const corsHeaders = {
     "Mcp-Protocol-Version, Mcp-Method, Mcp-Name",
 };
 
-// 提取处理逻辑为纯函数（MCP 2026-07-28 无状态核心）
-async function processMessage(
-  message: any,
-  urlParams: URLSearchParams,
-  reqHeaders?: Headers
-): Promise<any> {
-  // 优先读取 JSON-RPC Body 中的 method，若无则从 HTTP Header 获取 (mcp-method)
-  const method = message.method || reqHeaders?.get("mcp-method");
-  const params = message.params || {};
-  const id = message.id ?? null;
-  const _meta = message._meta;
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
-  if (_meta) {
-    console.log(`[MCP Metadata] Received _meta:`, _meta);
+/** Process one JSON-RPC MCP message without starting a server. */
+export async function processMessage(
+  message: JsonRpcRequest,
+  urlParams: URLSearchParams,
+  registry: ProviderRegistry,
+  reqHeaders?: Headers,
+  protocolVersion = PROTOCOL_VERSION,
+  serverName = "web-search-mcp",
+  serverVersion = "0.1.0",
+): Promise<Record<string, unknown> | null> {
+  const method = message.method || reqHeaders?.get("mcp-method");
+  const params = message.params ?? {};
+  const id = message.id ?? null;
+
+  if (message._meta) {
+    console.log(`[MCP Metadata] Received _meta:`, message._meta);
   }
 
-  // 1. 服务发现 RPC (server/discover) 与初始化握手 (initialize 兼容旧客户端)
   if (method === "server/discover" || method === "initialize") {
     return {
       jsonrpc: "2.0",
       id,
       result: {
-        protocolVersion: PROTOCOL_VERSION,
-        capabilities: {
-          tools: {
-            listChanged: true,
-          },
-        },
-        serverInfo: {
-          name: "web-search-mcp",
-          version: "1.0.0",
-        },
+        protocolVersion,
+        capabilities: { tools: { listChanged: true } },
+        serverInfo: { name: serverName, version: serverVersion },
       },
     };
   }
 
-  // 3. 客户端通知 (返回 null，在 HTTP 层按照 202 Accepted 处理)
   if (method === "notifications/initialized") {
     return null;
   }
 
-  // 4. 统一变更订阅响应流 (subscriptions/listen - 2026-07-28 新增)
   if (method === "subscriptions/listen") {
     return {
       jsonrpc: "2.0",
       id,
-      result: {
-        status: "listening",
-        subscriptions: ["toolsListChanged"],
-      },
+      result: { status: "listening", subscriptions: ["toolsListChanged"] },
     };
   }
 
-  // 5. 获取工具列表 — 动态根据 URL 参数返回
   if (method === "tools/list") {
     return {
       jsonrpc: "2.0",
       id,
-      result: {
-        tools: registry.getAvailableTools(urlParams),
-      },
+      result: { tools: registry.getAvailableTools(urlParams) },
     };
   }
 
-  // 6. 调用工具 — 动态分发到对应 Provider
   if (method === "tools/call") {
-    // 兼容：工具名称可从 params.name 或 HTTP Header "mcp-name" 获取
-    const name = params.name || reqHeaders?.get("mcp-name");
-    const args = params.arguments;
+    const name =
+      (typeof params.name === "string" ? params.name : undefined) ??
+      reqHeaders?.get("mcp-name");
+    const args =
+      typeof params.arguments === "object" && params.arguments !== null
+        ? (params.arguments as Record<string, unknown>)
+        : undefined;
+    const query = typeof args?.query === "string" ? args.query.trim() : "";
 
     try {
       if (!name) {
         throw new Error("Missing tool name in params or Mcp-Name header");
       }
-
-      if (!args?.query) {
+      if (!query) {
         return {
           jsonrpc: "2.0",
           id,
-          result: {
-            content: [{ type: "text", text: "请输入搜索关键词" }],
-          },
+          result: { content: [{ type: "text", text: "请输入搜索关键词" }] },
         };
       }
 
-      const result = await registry.callTool(name, args.query, urlParams);
+      const result = await registry.callTool(name, query, urlParams);
+      return { jsonrpc: "2.0", id, result };
+    } catch (error) {
       return {
         jsonrpc: "2.0",
         id,
-        result,
-      };
-    } catch (e: any) {
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: { code: -32603, message: e.message },
+        error: { code: -32603, message: errorMessage(error) },
       };
     }
   }
 
-  // 未知方法
   return {
     jsonrpc: "2.0",
     id,
-    error: { code: -32601, message: `Method '${method}' not found` },
+    error: { code: -32601, message: `Method '${method ?? ""}' not found` },
   };
 }
 
-// --- Bun Server 启动 ---
+function jsonResponse(
+  body: unknown,
+  status: number,
+  headers: Record<string, string>,
+): Response {
+  return new Response(body === null ? null : JSON.stringify(body), {
+    status,
+    headers: {
+      ...headers,
+      ...(body === null ? {} : { "Content-Type": "application/json" }),
+    },
+  });
+}
 
-export const server = Bun.serve({
-  port: 3000,
-  idleTimeout: 0,
-  async fetch(req, server) {
-    const url = new URL(req.url);
-    const path = url.pathname;
+/** Create a Fetch-compatible MCP handler for Bun, tests, or adapters. */
+export function createRequestHandler(
+  options: ServerOptions = {},
+): (request: Request) => Promise<Response> {
+  const registry = options.registry ?? createDefaultRegistry();
+  const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
+  const endpoint = options.path ?? DEFAULT_PATH;
+  const headers = { ...defaultCorsHeaders, ...options.corsHeaders };
+  const serverName = options.serverName ?? "web-search-mcp";
+  const serverVersion = options.serverVersion ?? "0.1.0";
 
-    // 跨域 OPTIONS 处理
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          ...corsHeaders,
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        },
+  return async (request) => {
+    const url = new URL(request.url);
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers });
+    }
+
+    if (url.pathname !== endpoint) {
+      return new Response("Not Found", { status: 404, headers });
+    }
+
+    if (request.method === "GET") {
+      return new Response(
+        "Subscription stream not supported directly via GET. Use POST for Streamable HTTP.",
+        { status: 405, headers: { ...headers, "Mcp-Protocol-Version": protocolVersion } },
+      );
+    }
+
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { ...headers, Allow: "GET, POST, OPTIONS" },
       });
     }
 
-    // 统一使用 /mcp 端点处理
-    if (path === "/mcp") {
-      // 1. 处理客户端 POST 请求（无状态 Request/Response）
-      if (req.method === "POST") {
-        try {
-          // 读取 2026-07-28 Header 路由信息（req.headers.get 不区分大小写）
-          const headerMethod = req.headers.get("mcp-method");
-          const headerName = req.headers.get("mcp-name");
+    try {
+      const headerMethod = request.headers.get("mcp-method");
+      const headerName = request.headers.get("mcp-name");
+      const textBody = await request.text();
+      const body: JsonRpcRequest = textBody.trim()
+        ? (JSON.parse(textBody) as JsonRpcRequest)
+        : {};
 
-          let body: any = {};
-          const textBody = await req.text();
-          if (textBody.trim().length > 0) {
-            body = JSON.parse(textBody);
-          }
+      if (headerMethod && !body.method) body.method = headerMethod;
+      if (headerName) {
+        body.params = body.params ?? {};
+        if (!body.params.name) body.params.name = headerName;
+      }
 
-          // 如果 Header 中提供了 Mcp-Method，且 Body 中无 method 时使用 Header
-          if (headerMethod && !body.method) {
-            body.method = headerMethod;
-          }
-
-          // 如果 Header 中提供了 Mcp-Name 且 params 中无 name
-          if (headerName) {
-            body.params = body.params || {};
-            if (!body.params.name) {
-              body.params.name = headerName;
-            }
-          }
-
-          // 如果是 subscriptions/listen 请求且客户端请求 SSE 连接流
-          if (
-            body.method === "subscriptions/listen" &&
-            req.headers.get("accept")?.includes("text/event-stream")
-          ) {
-            return new Response("event: ready\ndata: {\"status\":\"listening\"}\n\n", {
-              status: 200,
-              headers: {
-                ...corsHeaders,
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Mcp-Protocol-Version": PROTOCOL_VERSION,
-              },
-            });
-          }
-
-          const response = await processMessage(body, url.searchParams, req.headers);
-
-          // 客户端发送的是 notification（如 notifications/initialized），按照规范返回 202 无 body
-          if (!response) {
-            return new Response(null, {
-              status: 202,
-              headers: {
-                ...corsHeaders,
-                "Mcp-Protocol-Version": PROTOCOL_VERSION,
-              },
-            });
-          }
-
-          // 标准 JSON-RPC 响应，附带协议版本 Header
-          return new Response(JSON.stringify(response), {
+      if (
+        body.method === "subscriptions/listen" &&
+        request.headers.get("accept")?.includes("text/event-stream")
+      ) {
+        return new Response(
+          'event: ready\ndata: {"status":"listening"}\n\n',
+          {
             status: 200,
             headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Mcp-Protocol-Version": PROTOCOL_VERSION,
+              ...headers,
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              "Mcp-Protocol-Version": protocolVersion,
             },
-          });
-        } catch (err) {
-          console.error("Error processing message:", err);
-          return new Response("Invalid JSON or Processing Error", {
-            status: 400,
-            headers: {
-              ...corsHeaders,
-              "Mcp-Protocol-Version": PROTOCOL_VERSION,
-            },
-          });
-        }
+          },
+        );
       }
 
-      // 2. GET 请求提示
-      if (req.method === "GET") {
-        return new Response("Subscription stream not supported directly via GET. Use POST for Streamable HTTP.", {
-          status: 405,
-          headers: {
-            ...corsHeaders,
-            "Mcp-Protocol-Version": PROTOCOL_VERSION,
-          },
+      const response = await processMessage(
+        body,
+        url.searchParams,
+        registry,
+        request.headers,
+        protocolVersion,
+        serverName,
+        serverVersion,
+      );
+
+      if (!response) {
+        return new Response(null, {
+          status: 202,
+          headers: { ...headers, "Mcp-Protocol-Version": protocolVersion },
         });
       }
-    }
 
-    return new Response("Not Found", { status: 404, headers: corsHeaders });
-  },
-});
+      return jsonResponse(response, 200, {
+        ...headers,
+        "Mcp-Protocol-Version": protocolVersion,
+      });
+    } catch (error) {
+      console.error("Error processing message:", error);
+      return new Response("Invalid JSON or Processing Error", {
+        status: 400,
+        headers: { ...headers, "Mcp-Protocol-Version": protocolVersion },
+      });
+    }
+  };
+}
+
+function defaultPort(): number {
+  const value = Number(process.env.PORT);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_PORT;
+}
+
+/** Start the MCP server explicitly. Importing this module has no side effects. */
+export function startServer(options: ServerOptions = {}): McpServer {
+  const handler = createRequestHandler(options);
+  const serverOptions: Parameters<typeof Bun.serve>[0] = {
+    port: options.port ?? defaultPort(),
+    idleTimeout: options.idleTimeout ?? 0,
+    fetch: handler,
+  };
+  if (options.hostname) serverOptions.hostname = options.hostname;
+  return Bun.serve(serverOptions);
+}
+
+/** Alias for consumers that prefer `server()` as their startup API. */
+export const server = startServer;
+
+export default startServer;

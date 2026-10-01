@@ -4,12 +4,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-RUN bun build --bytecode --minify \
-  --target=bun \
-  --compile \
-  ./src/index.ts --outfile=./dist/server
+RUN bun run build:binary
 
 FROM oven/bun:1-alpine AS runner
 WORKDIR /app
-COPY --from=builder /app/dist/server /app/server
+COPY --from=builder /app/dist/web-search-mcp /app/server
 CMD ["./server"]

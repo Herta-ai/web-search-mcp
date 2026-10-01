@@ -9,10 +9,35 @@ import { TencentmaasProvider } from "./providers/tencentmaas";
 import { AliyuncsProvider } from "./providers/aliyuncs";
 
 export class ProviderRegistry {
-  private providers: SearchProvider[] = [];
+  private readonly providers: SearchProvider[] = [];
 
-  register(provider: SearchProvider): void {
+  constructor(providers: Iterable<SearchProvider> = []) {
+    for (const provider of providers) {
+      this.register(provider);
+    }
+  }
+
+  register(provider: SearchProvider): this {
+    if (this.providers.some((current) => current.name === provider.name)) {
+      throw new Error(`Provider '${provider.name}' is already registered`);
+    }
     this.providers.push(provider);
+    return this;
+  }
+
+  unregister(name: string): boolean {
+    const index = this.providers.findIndex((provider) => provider.name === name);
+    if (index < 0) return false;
+    this.providers.splice(index, 1);
+    return true;
+  }
+
+  getProvider(name: string): SearchProvider | undefined {
+    return this.providers.find((provider) => provider.name === name);
+  }
+
+  getProviders(): readonly SearchProvider[] {
+    return this.providers;
   }
 
   /** 根据 URL 参数返回可用的 MCP 工具列表 */
@@ -71,10 +96,15 @@ export class ProviderRegistry {
   }
 }
 
-// --- 创建全局注册表实例并注册所有 Provider ---
-export const registry = new ProviderRegistry();
-registry.register(new KimiProvider());
-registry.register(new ZaiProvider());
-registry.register(new VolcesProvider());
-registry.register(new TencentmaasProvider());
-registry.register(new AliyuncsProvider());
+export function createDefaultRegistry(): ProviderRegistry {
+  return new ProviderRegistry([
+    new KimiProvider(),
+    new ZaiProvider(),
+    new VolcesProvider(),
+    new TencentmaasProvider(),
+    new AliyuncsProvider(),
+  ]);
+}
+
+/** Backwards-compatible shared registry for simple applications. */
+export const registry = createDefaultRegistry();
